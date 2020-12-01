@@ -1,77 +1,91 @@
 import processing.serial.*;
 
 Serial port;                      // The serial port
-int tPos = 1;                     // Position along the chart's time axis
+String portname;                  // The serial port name
+
+int tPos;                         // Position along the chart's time axis
+
 float rawValue;                   // Raw data value from serial port
-float processedValue = height/2;  // EWMA-smoothed value
+float processedValue;             // EWMA-smoothed value
+
+/**
+  * Opens first available serial port (usually something like 'COM3')
+  *  with 9600 baud rate (must match baud rate from microcontroller output)
+  */
+void connect() {
+  while(Serial.list().length == 0);  // Wait until board connects
+  portname = Serial.list()[0];       // Get first available port name
+  port = new Serial(this, portname, 9600);  // Connect to port
+  port.bufferUntil('\n');            // Call serialEvent() when newline received
+
+  // Initialize variables
+  tPos-= 90;                         // Offset initial buffer delay
+  int windowHeight = height + 20;    // 'height' value is 20 pixels off
+  rawValue = windowHeight/2;
+  processedValue = windowHeight/2;
+}
+  
 
 void setup () {
-  fullScreen();                   // Set window size
-  background(0);                  // Initalize background color
-
-  /**
-    * Open first available serial port (usually something like 'COM3')
-    *  with 9600 baud rate (must match baud rate from microcontroller output)
-    */
-  //portname = Serial.list()[0];
-  port = new Serial(this, Serial.list()[0], 9600);
-
-  port.bufferUntil('\n');         // Call serialEvent() when newline received
+  fullScreen();  // Set window size
+  connect();     // Initialize serial communication
+  background(0); // Set background color
 }
 
 void draw () {
   // Data update happens in serialEvent() handler
 
-  // Show the name of the serial port that got connected
-  stroke(255);
-  text(Serial.list()[0], 20, 20);
+  int windowHeight = height + 20;   // 'height' value is 20 pixels off
+  int threshold = windowHeight / 2; // Define left/right acceleration boundary
 
-  int threshold = height / 2;     // Define left/right acceleration boundary
+  // Try reconnecting if disconnected
+  if(Serial.list().length == 0) connect();
+
+  // Show the name of the serial port that got connected
+  fill(255); stroke(255); textSize(12);
+  text(portname, 20, 20);
 
   // Draw green area between threshold and processedValue
   stroke(0,255,0);
-  line(tPos, height - processedValue, tPos, threshold);
+  line(tPos, threshold, tPos, windowHeight - processedValue);
 
   // Draw red area between processedValue and rawValue
   stroke(255,0,0);
-  line(tPos, height - rawValue, tPos, height - processedValue);
+  line(tPos, windowHeight - processedValue, tPos, windowHeight - rawValue);
 
-  /**
-   * Some instances of 'line()' are picky about the order of the arguments,
-   *  so just repeating the line drawing steps with the line endpoints flipped.
-   */
-  stroke(0,255,0);
-  line(tPos, threshold, tPos, height - processedValue);
-  stroke(255,0,0);
-  line(tPos, height - processedValue, tPos, height - rawValue);
-
-  //// Show the current value
-  //stroke(255);
-  //rect(0, 20, 100, 60);
-  //text(processedValue, 20, 20);
+  // Show current angle (mapped back to 0 - 180 degrees)
+  fill(0); stroke(255);
+  rect(10, 30, 180, 40);
+  fill(255); textSize(32);
+  text(map(processedValue, 0, windowHeight, 0, 180), 20, 60);
 
   // Reset chart when full
   if (tPos >= width) {
     tPos = 0;                   // Move draw position back to start
     background(0);              // Clear chart
-  } else {
-    tPos++;                     // Increment horizontal position
-  }
+  } else tPos++;                // Increment horizontal position
 }
 
 /**
   * This function gets called automatically by the serial port object
   */
 void serialEvent (Serial port) {
-  // Get ASCII string
-  String inString = port.readStringUntil('\n');
-  //print(inString);              // Print statement for debugging
+  int windowHeight = height + 20;  // 'height' value is 20 pixels off
+
+  String inString = port.readStringUntil('\n'); // Get ASCII string
 
   // Process the data
   if (inString != null) {
     inString = trim(inString);  // Trim off whitespace
     rawValue = float(inString); // Convert input text to a decimal number
-    rawValue = map(rawValue, 0, 180, 0, height);  // Map to screen height
+
+    // If inString wasn't numerical
+    if(Float.isNaN(rawValue)) {
+      rawValue = windowHeight/2; // Set to default
+    } else {
+      // Otherwise, scale value to fit the window height
+      rawValue = map(rawValue, 0, 180, 0, windowHeight);
+    }
 
     /**
       * Data processing is just an Exponentially Weighted Moving Average (EWMA)
