@@ -1,32 +1,61 @@
-int xPin = 2; //Pins for Accelerometer
-int yPin = 3;
-int temp; //temporary calculations value
-int accelerationX, accelerationY = 90; //Servo positions, initializes to middle of field
+int xPin = 3; // Pins for accelerometer
+int yPin = 4;
+int accelerationX, accelerationY = 90; // Variables to hold acceleration data
 
 void setup() {
-    // Initialize the serial communication:
+    // Initialize serial communication
     Serial.begin(9600);
 }
 
 void loop() {
-  float pulseX = (((pulseIn(xPin, HIGH) - 3700) * 18.0) / 250); //reading from accelerometer and converting value to 0-180
-  float pulseY = (((pulseIn(yPin, HIGH) - 3700) * 18.0) / 250);
- 
-  temp = (accelerationX - pulseX); //Determines difference between new readings and current position
-  temp = abs(temp);
-  accelerationX = pulseX;
-  if (accelerationX > 180) accelerationX = 180; //sets max value
-  if (accelerationX < 0) accelerationX = 0; //sets minimum value
+  // Read in acceleration data
+  float pulseX = getAcceleration(xPin);
+  float pulseY = getAcceleration(yPin);
 
-  temp = (accelerationY - pulseY); //Determines difference between new readings and current position
-  temp = abs(temp);
-  accelerationY = pulseY;
-  if (accelerationY > 180) accelerationY = 180; //sets max value
-  if (accelerationY < 0) accelerationY = 0; //sets minimum value
+  // Clip values
+  accelerationX = rangeClip((int) pulseX, 0, 180);
+  accelerationY = rangeClip((int) pulseY, 0, 180);
 
-//  Serial.println(accelerationX);
-  Serial.println(accelerationY);
+  // Send sensor data over serial connection
+  Serial.println(accelerationX);
+  //Serial.println(accelerationY);
 
-  delay(1); //Tiny delay to reduce electrical noise
+  delay(1); // Short delay to reduce electrical noise
+}
+
+/**
+ * @brief Limits values to a given range
+ * 
+ * @param value - The value to clip
+ * @param min_value - The minimum value of the range (inclusive)
+ * @param max_value - The maximum value of the range (inclusive)
+ * 
+ * @returns the original value if within range, otherwise min if value < range or max if value > range
+ */
+int rangeClip(int value, int min_range, int max_range) {
+  int clipped_value = value;
+
+  // Set minimum
+  if(clipped_value < min_range) {
+    clipped_value = min_range;
+  }
+
+  // Set maximum
+  if(clipped_value > max_range) {
+    clipped_value = max_range;
+  }
+
+  return clipped_value;
+}
+
+/**
+ * @brief Reads in data from accelerometer
+ * 
+ * @param pin - The pin number the accelerometer is connected to
+ * 
+ * @returns angle between 0 - 180 degrees
+ */
+float getAcceleration(int pin) {
+  return (((pulseIn(xPin, HIGH) - 3700) * 18.0) / 250);
 }
 
